@@ -103,7 +103,7 @@ kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:9px;c
 </head>
 <body>
 <header class="top">
-  <div class="title"><h1>MOTIONMAKER</h1><div class="build">BUILD 2026-09-18.15</div></div>
+  <div class="title"><h1>MOTIONMAKER</h1><div class="build">BUILD 2026-09-18.16</div></div>
   <button class="btn" id="bNew">NEW</button>
   <button class="btn" id="bLoad">LOAD</button>
   <button class="btn" id="bSave">SAVE</button>
@@ -349,7 +349,7 @@ kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:9px;c
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script>
 'use strict';
-const BUILD='2026-09-18.15';
+const BUILD='2026-09-18.16';
 if(!window.THREE||!THREE.OrbitControls||!THREE.TransformControls){document.body.innerHTML='<div style="padding:40px;font:13px/1.6 monospace;color:#e7ecf5">MOTIONMAKER could not load three.js from cdn.jsdelivr.net.<br>Check the network connection or an ad/script blocker, then reload.</div>';throw new Error('three.js addons missing');}
 const $=id=>document.getElementById(id);
 const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
@@ -360,7 +360,7 @@ const EASE={linear:t=>t,in:t=>t*t,out:t=>1-(1-t)*(1-t),inout:t=>t<.5?2*t*t:1-Mat
   elastic:t=>t===0?0:t===1?1:Math.pow(2,-10*t)*Math.sin((t*10-0.75)*(2*Math.PI/3))+1,
   anticipate:t=>{const c=1.70158;return t*t*((c+1)*t-c);},
   swing:t=>{const c=1.70158*1.525;return t<.5?(Math.pow(2*t,2)*((c+1)*2*t-c))/2:(Math.pow(2*t-2,2)*((c+1)*(t*2-2)+c)+2)/2;},
-  drop:t=>1-EASE.bounce(1-t),
+  drop:t=>{const b=EASE.bounce(t);return 0.55*b+0.45*(1-(1-t)*(1-t));}, // softened bounce on arrival
   spring:t=>t===0?0:t===1?1:-Math.pow(2,10*t-10)*Math.sin((t*10-10.75)*(2*Math.PI/3))};
 const ERRLOG=[];function logErr(where,e){const m=where+': '+((e&&e.stack)||e);ERRLOG.push(m);console.error(m);let d=document.getElementById('errlog');if(!d){d=document.createElement('pre');d.id='errlog';d.style.cssText='position:absolute;left:8px;bottom:8px;max-width:60%;max-height:40%;overflow:auto;background:#2a1010;color:#ff6b6b;font:10px/1.4 monospace;padding:8px;border:1px solid #ff6b6b;border-radius:6px;z-index:99;white-space:pre-wrap';document.getElementById('viewwrap').appendChild(d);}d.textContent=ERRLOG.slice(-6).join('\n\n');}
 window.addEventListener('error',e=>logErr('window',e.error||e.message));window.addEventListener('unhandledrejection',e=>logErr('promise',e.reason));
@@ -705,7 +705,8 @@ function rigDemo(){
   // same offsets, same order backwards, so the loop closes on itself
   const ORDER=['FACEPLATE','SCREEN','SCREEN_HOLDER_L','SCREEN_HOLDER_R','SLOT_POWER_L','SLOT_POWER_R','RAIL','POWER_MODULE','END_CAP_L','END_CAP_R','SLEEVE_L','SLEEVE_R','LEG_L','LEG_R','MOUNT_PLATE','SLOT_KEY_L','SLOT_KEY_R','CLAMP_L','CLAMP_R','GLIDES_L','GLIDES_R'];
   const ACT1=['MOUNT_PLATE','LEG_R','LEG_L','SLEEVE_R','SLEEVE_L','END_CAP_R','END_CAP_L','POWER_MODULE','FACEPLATE']; // reverse of ORDER, act-1 parts only
-  ACT1.forEach((n,i)=>{const p=pn(n),e=EX[n];if(!p||!e)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:0,dur:0,style:'linear'});p.moves.push({id:uid(),kind:'move',vec:e.map(v=>-v),start:0.4+i*0.3,dur:1.8,style:'drop'});});
+  const ST0={MOUNT_PLATE:'bounce',LEG_R:'drop',LEG_L:'drop',SLEEVE_R:'inout',SLEEVE_L:'inout',END_CAP_R:'out',END_CAP_L:'out',POWER_MODULE:'inout',FACEPLATE:'out'};
+  ACT1.forEach((n,i)=>{const p=pn(n),e=EX[n];if(!p||!e)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:0,dur:0,style:'linear'});p.moves.push({id:uid(),kind:'move',vec:e.map(v=>-v),start:0.4+i*0.3,dur:1.8,style:ST0[n]||'inout'});});
   S.texts.push({id:uid(),l1:'POWER DREAM',l2:'expandable power beam concept · 可扩展功率光束概念',t0:0.3,t1:4.6,fade:0.5,size:40,color:'#e7ecf5',anchor:'screen',x:5,y:8,snap:null});
   // act 1: 48, 54, 60, 72 and back to 60
   for(const n of LATER)hideAtStart(n);
@@ -716,26 +717,26 @@ function rigDemo(){
   J(11.1,0,1.5);  T('everything in between!','介于两者之间的一切！',11.1,13.0);
   // act 2: the shared PET screen, brackets flush on the beam top (from above: nothing is in the way)
   for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])preOffset(n,[0,0,-RAIL_H]);
-  dropIn('SCREEN_HOLDER_L',13.2,10,1.2,'drop'); dropIn('SCREEN_HOLDER_R',13.2,10,1.2,'drop'); dropIn('SCREEN',13.4,14,1.4,'drop');
+  dropIn('SCREEN_HOLDER_L',13.2,10,1.2,'drop'); dropIn('SCREEN_HOLDER_R',13.2,10,1.2,'drop'); dropIn('SCREEN',13.4,14,1.4,'bounce');
   T('PET shared screens','PET 共享屏幕',13.4,17.0);
   // act 3: legs off, screen lifts well clear, rail drops in, screen and brackets come down onto the rail,
   // power modules come down beside the beam ends and slot in along the rail
   for(const n of ['LEG_L','LEG_R']){step(n,{kind:'move',vec:[0,0,-26],start:17.2,dur:1.3,style:'in'});step(n,{kind:'hide',start:18.5,dur:0.05,style:'linear'});}
   for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,12],start:17.6,dur:1.0,style:'inout'});
-  dropIn('RAIL',18.7,8,1.2,'drop');
+  dropIn('RAIL',18.7,8,1.2,'out');
   for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,-12+RAIL_H],start:20.0,dur:1.0,style:'drop'});
   step('SLOT_KEY_L',{kind:'show',start:20.0,dur:0.05,style:'linear'}); step('SLOT_KEY_R',{kind:'show',start:20.0,dur:0.05,style:'linear'});
-  const sideIn=(n,sx,t)=>{preOffset(n,[sx,0,10]);step(n,{kind:'show',start:t,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,-10],start:t+0.05,dur:0.9,style:'drop'});step(n,{kind:'move',vec:[-sx,0,0],start:t+1.1,dur:0.9,style:'out'});};
+  const sideIn=(n,sx,t)=>{preOffset(n,[sx,0,10]);step(n,{kind:'show',start:t,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,-10],start:t+0.05,dur:0.9,style:'out'});step(n,{kind:'move',vec:[-sx,0,0],start:t+1.1,dur:0.9,style:'inout'});};
   sideIn('SLOT_POWER_L',-14,21.1); sideIn('SLOT_POWER_R',14,21.1);
   step('CLAMP_L',{kind:'show',start:21.1,dur:0.05,style:'linear'}); step('CLAMP_R',{kind:'show',start:21.1,dur:0.05,style:'linear'});
   T('shared slot rail for accessories','用于配件的共用槽轨',18.8,24.2);
   // act 4: legs back, power on either side. faceplate drops to the floor, receptacle comes out clear of the beam,
   // spins in the open, goes back in, faceplate rises and attaches
-  for(const n of ['LEG_L','LEG_R']){step(n,{kind:'show',start:24.4,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,26],start:24.45,dur:1.2,style:'drop'});}
+  for(const n of ['LEG_L','LEG_R']){step(n,{kind:'show',start:24.4,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,26],start:24.45,dur:1.2,style:'bounce'});}
   T('power on either side','电源可安装在任意一侧',25.8,33.2);
-  {const fpd=floorDrop('FACEPLATE');mvs('FACEPLATE',25.9,'-Y',6,0.8,'out');step('FACEPLATE',{kind:'move',vec:[0,0,fpd],start:26.8,dur:0.9,style:'drop'});
-   mvs('POWER_MODULE',27.4,'-Y',12,1.0,'out');if(pm)pm.moves.push({id:uid(),kind:'rotate',q:[0,0,1,0],start:28.6+SH,dur:1.6,style:'inout'});mvs('POWER_MODULE',30.4,'Y',12,1.0,'drop');
-   step('FACEPLATE',{kind:'move',vec:[0,0,-fpd],start:31.5,dur:0.9,style:'out'});mvs('FACEPLATE',32.5,'Y',6,0.7,'out');}
+  {const fpd=floorDrop('FACEPLATE');mvs('FACEPLATE',25.9,'-Y',6,0.8,'in');step('FACEPLATE',{kind:'move',vec:[0,0,fpd],start:26.8,dur:0.9,style:'bounce'});
+   mvs('POWER_MODULE',27.4,'-Y',12,1.0,'out');if(pm)pm.moves.push({id:uid(),kind:'rotate',q:[0,0,1,0],start:28.6+SH,dur:1.6,style:'inout'});mvs('POWER_MODULE',30.4,'Y',12,1.0,'inout');
+   step('FACEPLATE',{kind:'move',vec:[0,0,-fpd],start:31.5,dur:0.9,style:'out'});mvs('FACEPLATE',32.5,'Y',6,0.7,'inout');}
   // act 5: everything explodes and gets its label
   const EXS=33.6+SH;
   ORDER.forEach((n,i)=>{const p=pn(n),e=EX[n];if(!p||!e)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:EXS+i*0.14,dur:1.8,style:'overshoot'});});
