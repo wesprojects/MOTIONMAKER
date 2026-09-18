@@ -44,7 +44,11 @@ section.stage{position:relative;display:flex;flex-direction:column;min-width:0;m
 #empty.hide{display:none}
 #hud{position:absolute;left:12px;top:10px;font-size:10px;color:var(--mute);pointer-events:none;white-space:pre}
 #modebar{position:absolute;right:12px;top:10px;display:flex;gap:6px}
-#tlwrap{height:230px;flex:none;border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+#tlwrap{height:var(--tlH,230px);flex:none;border-top:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+#tlsplit{height:6px;flex:none;background:var(--line);cursor:row-resize}
+#tlsplit:hover{background:var(--amber)}
+#viewwrap.fs{background:#0d0f13}
+#viewwrap.fs #hud,#viewwrap.fs #modebar{display:none}
 #tlbar{display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line)}
 .btn.play{background:var(--amber);color:#0d0f13;border-color:var(--amber);font-weight:700;padding:6px 18px;font-size:11px}
 .btn.play:hover{filter:brightness(1.1)}
@@ -99,7 +103,7 @@ kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:9px;c
 </head>
 <body>
 <header class="top">
-  <div class="title"><h1>MOTIONMAKER</h1><div class="build">BUILD 2026-09-18.10</div></div>
+  <div class="title"><h1>MOTIONMAKER</h1><div class="build">BUILD 2026-09-18.12</div></div>
   <button class="btn" id="bNew">NEW</button>
   <button class="btn" id="bLoad">LOAD</button>
   <button class="btn" id="bSave">SAVE</button>
@@ -270,11 +274,13 @@ kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:9px;c
         <button class="btn on" id="bModeMove" title="W">MOVE</button>
         <button class="btn" id="bModeRot" title="E">ROTATE</button>
         <button class="btn" id="bSpace" title="X">WORLD</button>
-        
+        <button class="btn" id="bLabels" title="show snap points, joint axes and their names">LABELS</button>
+        <button class="btn" id="bPreview" title="fullscreen preview, loops, esc to leave">⛶ PREVIEW</button>
       </div>
       <div id="toast"></div>
       <div id="recmodal"><div id="recbox"><div id="recTitle">RECORDING</div><div id="recbar"><div></div></div><div class="kv" id="recInfo"></div><div class="row" style="margin-top:8px"><button class="btn" id="bRecCancel">CANCEL</button></div></div></div>
     </div>
+    <div id="tlsplit" title="drag to resize the timeline"></div>
     <div id="tlwrap">
       <div id="tlbar">
         <button class="btn play" id="bPlay">▶ PLAY</button>
@@ -342,7 +348,7 @@ kbd{border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:9px;c
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
 <script>
 'use strict';
-const BUILD='2026-09-18.10';
+const BUILD='2026-09-18.12';
 if(!window.THREE||!THREE.OrbitControls||!THREE.TransformControls){document.body.innerHTML='<div style="padding:40px;font:13px/1.6 monospace;color:#e7ecf5">MOTIONMAKER could not load three.js from cdn.jsdelivr.net.<br>Check the network connection or an ad/script blocker, then reload.</div>';throw new Error('three.js addons missing');}
 const $=id=>document.getElementById(id);
 const V3=(x=0,y=0,z=0)=>new THREE.Vector3(x,y,z);
@@ -368,7 +374,7 @@ const S={
   camKeys:[],      // {t,pos:[3],tgt:[3],fov,ease}
   fps:30,dur:8,time:0,playing:false,loop:true,
   sel:[],activeSnap:null,activeJoint:null,activeText:null,autoKey:true,
-  bg:'dark',grid:true,shadow:true,
+  bg:'dark',grid:true,shadow:true,showLabels:false,preview:false,
   srcName:'',srcTree:null,srcUnit:1,splitLevel:0,
   presets:[],      // {id,name,values:[{joint,v}]}
   nextId:1,
@@ -678,15 +684,21 @@ function rigDemo(){
   const dropIn=(n,t,lift,dur,style)=>{preOffset(n,[0,0,lift]);step(n,{kind:'show',start:t,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,-lift],start:t+0.05,dur,style:style||'out'});};
   const RAIL_H=1.19;
   // exploded layout: offset per part (parts that ride on a parent are offset in the parent's frame)
-  const EX={CASSETTE:[0,0,0],SLEEVE_L:[-16,0,0],SLEEVE_R:[16,0,0],END_CAP_L:[-9,0,0],END_CAP_R:[9,0,0],LEG_L:[-5,0,-9],LEG_R:[5,0,-9],MOUNT_PLATE:[0,0,-10],POWER_MODULE:[0,-11,-3],FACEPLATE:[0,-19,1],
+  const EX={CASSETTE:[0,0,0],SLEEVE_L:[-16,0,0],SLEEVE_R:[16,0,0],END_CAP_L:[-9,0,0],END_CAP_R:[9,0,0],LEG_L:[0,0,-10],LEG_R:[0,0,-10],MOUNT_PLATE:[0,0,-10],POWER_MODULE:[0,-12,0],FACEPLATE:[0,-22,0],
     RAIL:[0,0,9],SCREEN_HOLDER_L:[-6,0,17],SCREEN_HOLDER_R:[6,0,17],SLOT_KEY_L:[0,0,-4],SLOT_KEY_R:[0,0,-4],SCREEN:[0,0,29],SLOT_POWER_L:[-9,7,15],SLOT_POWER_R:[9,7,15],CLAMP_L:[0,0,-5],CLAMP_R:[0,0,-5]};
   const DESC={CASSETTE:['CASSETTE','fixed centre member'],SLEEVE_L:['SLEEVE L','telescoping end'],SLEEVE_R:['SLEEVE R','telescoping end'],END_CAP_L:['END CAP L',''],END_CAP_R:['END CAP R',''],LEG_L:['LEG L','sit-stand column'],LEG_R:['LEG R','sit-stand column'],MOUNT_PLATE:['MOUNT PLATE','power tray'],POWER_MODULE:['POWER MODULE','receptacle unit'],FACEPLATE:['FACEPLATE','outlet cover, either side'],
     RAIL:['SLOT RAIL','shared accessory rail'],SCREEN_HOLDER_L:['SCREEN HOLDER L','PET screen bracket'],SCREEN_HOLDER_R:['SCREEN HOLDER R','PET screen bracket'],SLOT_KEY_L:['SLOT KEY L','rail insert'],SLOT_KEY_R:['SLOT KEY R','rail insert'],SCREEN:['PET SCREEN','shared privacy screen'],SLOT_POWER_L:['SLOT POWER L','rail-mounted power'],SLOT_POWER_R:['SLOT POWER R','rail-mounted power'],CLAMP_L:['CLAMP L','rail clamp'],CLAMP_R:['CLAMP R','rail clamp']};
-  const ACT1=['LEG_L','LEG_R','SLEEVE_L','SLEEVE_R','END_CAP_L','END_CAP_R','CASSETTE','MOUNT_PLATE','POWER_MODULE','FACEPLATE'];
   const LATER=['SCREEN','SCREEN_HOLDER_L','SCREEN_HOLDER_R','SLOT_KEY_L','SLOT_KEY_R','RAIL','CLAMP_L','CLAMP_R','SLOT_POWER_L','SLOT_POWER_R'];
-  // act 0: the beam assembles itself from an exploded start (0 … 5 s)
-  const ASM=[['CASSETTE','inout'],['MOUNT_PLATE','overshoot'],['SLEEVE_L','swing'],['SLEEVE_R','swing'],['END_CAP_L','spring'],['END_CAP_R','spring'],['LEG_L','drop'],['LEG_R','drop'],['POWER_MODULE','overshoot'],['FACEPLATE','swing']];
-  ASM.forEach(([n,style],i)=>{const e=EX[n];const p=pn(n);if(!p)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:0,dur:0,style:'linear'});p.moves.push({id:uid(),kind:'move',vec:e.map(v=>-v),start:0.4+i*0.28,dur:1.6,style});});
+  const floorDrop=n=>{const p=pn(n);return p?-(p.bbox.min[2]-0.05):0;}; // move that puts a part's bottom on the floor
+  // act 0: the beam assembles itself (0 … 5 s). every path is collision free: sleeves and caps slide in along the beam,
+  // mount plate and legs rise from below, receptacle and faceplate rest on the floor in front, rise, then slide in.
+  const A=(n,pre,legs)=>{const p=pn(n);if(!p)return;p.moves.push({id:uid(),kind:'move',vec:pre,start:0,dur:0,style:'linear'});legs.forEach(([vec,start,dur,style])=>p.moves.push({id:uid(),kind:'move',vec,start,dur,style}));};
+  A('MOUNT_PLATE',[0,0,-10],[[[0,0,10],0.4,1.2,'drop']]);
+  A('SLEEVE_L',[-16,0,0],[[[16,0,0],0.8,1.4,'swing']]); A('SLEEVE_R',[16,0,0],[[[-16,0,0],0.8,1.4,'swing']]);
+  A('END_CAP_L',[-9,0,0],[[[9,0,0],1.6,1.0,'spring']]); A('END_CAP_R',[9,0,0],[[[-9,0,0],1.6,1.0,'spring']]);
+  A('LEG_L',[0,0,-24],[[[0,0,24],1.9,1.3,'drop']]); A('LEG_R',[0,0,-24],[[[0,0,24],1.9,1.3,'drop']]);
+  {const pmd=floorDrop('POWER_MODULE');A('POWER_MODULE',[0,-12,pmd],[[[0,0,-pmd],2.4,1.1,'out'],[[0,12,0],3.5,0.9,'drop']]);}
+  {const fpd=floorDrop('FACEPLATE');A('FACEPLATE',[0,-16,fpd],[[[0,0,-fpd],3.0,1.0,'out'],[[0,16,0],4.3,0.7,'spring']]);}
   S.texts.push({id:uid(),l1:'POWER DREAM',l2:'expandable power beam concept · 可扩展功率光束概念',t0:0.3,t1:4.6,fade:0.5,size:40,color:'#e7ecf5',anchor:'screen',x:5,y:8,snap:null});
   // act 1: 48, 54, 60, 72 and back to 60
   for(const n of LATER)hideAtStart(n);
@@ -695,37 +707,40 @@ function rigDemo(){
   J(6.1,0,1.5);   T('60 inch nominal length','标称长度 60 英寸 · 实际长度 1376.1 毫米',6.2,8.5);
   J(8.6,6,1.8);   T('72 inch nominal length','标称长度 72 英寸 · 实际长度 1680.9 毫米',8.7,11.0);
   J(11.1,0,1.5);  T('everything in between!','介于两者之间的一切！',11.1,13.0);
-  // act 2: the shared PET screen, brackets flush on the beam top
+  // act 2: the shared PET screen, brackets flush on the beam top (from above: nothing is in the way)
   for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])preOffset(n,[0,0,-RAIL_H]);
-  dropIn('SCREEN_HOLDER_L',13.2,10,1.2,'drop'); dropIn('SCREEN_HOLDER_R',13.2,10,1.2,'drop'); dropIn('SCREEN',13.4,14,1.4,'swing');
+  dropIn('SCREEN_HOLDER_L',13.2,10,1.2,'drop'); dropIn('SCREEN_HOLDER_R',13.2,10,1.2,'drop'); dropIn('SCREEN',13.4,14,1.4,'drop');
   T('PET shared screens','PET 共享屏幕',13.4,17.0);
-  // act 3: legs off, slot rail on, brackets onto the rail, power modules slide out and back
+  // act 3: legs off, screen lifts well clear, rail drops in, screen and brackets come down onto the rail,
+  // power modules come down beside the beam ends and slot in along the rail
   for(const n of ['LEG_L','LEG_R']){step(n,{kind:'move',vec:[0,0,-26],start:17.2,dur:1.3,style:'anticipate'});step(n,{kind:'hide',start:18.5,dur:0.05,style:'linear'});}
-  for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,6],start:17.6,dur:1.0,style:'inout'});
-  dropIn('RAIL',18.7,8,1.2,'overshoot');
-  for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,-6+RAIL_H],start:20.0,dur:1.0,style:'drop'});
+  for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,12],start:17.6,dur:1.0,style:'inout'});
+  dropIn('RAIL',18.7,8,1.2,'drop');
+  for(const n of ['SCREEN_HOLDER_L','SCREEN_HOLDER_R','SCREEN'])step(n,{kind:'move',vec:[0,0,-12+RAIL_H],start:20.0,dur:1.0,style:'drop'});
   step('SLOT_KEY_L',{kind:'show',start:20.0,dur:0.05,style:'linear'}); step('SLOT_KEY_R',{kind:'show',start:20.0,dur:0.05,style:'linear'});
-  dropIn('SLOT_POWER_L',21.1,8,1.0,'drop'); dropIn('SLOT_POWER_R',21.1,8,1.0,'drop');
+  const sideIn=(n,sx,t)=>{preOffset(n,[sx,0,10]);step(n,{kind:'show',start:t,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,-10],start:t+0.05,dur:0.9,style:'drop'});step(n,{kind:'move',vec:[-sx,0,0],start:t+1.1,dur:0.9,style:'spring'});};
+  sideIn('SLOT_POWER_L',-14,21.1); sideIn('SLOT_POWER_R',14,21.1);
   step('CLAMP_L',{kind:'show',start:21.1,dur:0.05,style:'linear'}); step('CLAMP_R',{kind:'show',start:21.1,dur:0.05,style:'linear'});
-  T('shared slot rail for accessories','用于配件的共用槽轨',18.8,26.6);
-  mvs('SLOT_POWER_L',22.6,'-X',14,1.6,'swing'); mvs('SLOT_POWER_R',22.6,'X',14,1.6,'swing');
-  mvs('SLOT_POWER_L',25.0,'X',14,1.6,'swing'); mvs('SLOT_POWER_R',25.0,'-X',14,1.6,'swing');
-  // act 4: legs back, power on either side
-  for(const n of ['LEG_L','LEG_R']){step(n,{kind:'show',start:26.8,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,26],start:26.85,dur:1.2,style:'overshoot'});}
-  T('power on either side','电源可安装在任意一侧',28.2,33.5);
-  mvs('FACEPLATE',28.3,'-Y',8,1.2,'anticipate');
-  if(pm)pm.moves.push({id:uid(),kind:'rotate',q:[0,0,1,0],start:29.7+SH,dur:2,style:'swing'});
-  mvs('FACEPLATE',32.0,'Y',8,1.2,'spring');
-  // act 5: everything explodes and gets its label (33.8 … 42 s)
-  const EXS=33.8+SH;
-  const ORDER=['SCREEN','SCREEN_HOLDER_L','SCREEN_HOLDER_R','SLOT_POWER_L','SLOT_POWER_R','RAIL','FACEPLATE','POWER_MODULE','END_CAP_L','END_CAP_R','SLEEVE_L','SLEEVE_R','LEG_L','LEG_R','MOUNT_PLATE','SLOT_KEY_L','SLOT_KEY_R','CLAMP_L','CLAMP_R'];
-  ORDER.forEach((n,i)=>{const p=pn(n),e=EX[n];if(!p||!e)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:EXS+i*0.12,dur:1.8,style:'overshoot'});});
+  T('shared slot rail for accessories','用于配件的共用槽轨',18.8,27.2);
+  mvs('SLOT_POWER_L',23.4,'-X',14,1.6,'swing'); mvs('SLOT_POWER_R',23.4,'X',14,1.6,'swing');
+  mvs('SLOT_POWER_L',25.6,'X',14,1.6,'swing'); mvs('SLOT_POWER_R',25.6,'-X',14,1.6,'swing');
+  // act 4: legs back, power on either side. faceplate drops to the floor, receptacle comes out clear of the beam,
+  // spins in the open, goes back in, faceplate rises and attaches
+  for(const n of ['LEG_L','LEG_R']){step(n,{kind:'show',start:27.4,dur:0.05,style:'linear'});step(n,{kind:'move',vec:[0,0,26],start:27.45,dur:1.2,style:'drop'});}
+  T('power on either side','电源可安装在任意一侧',28.8,36.2);
+  {const fpd=floorDrop('FACEPLATE');mvs('FACEPLATE',28.9,'-Y',6,0.8,'out');step('FACEPLATE',{kind:'move',vec:[0,0,fpd],start:29.8,dur:0.9,style:'drop'});
+   mvs('POWER_MODULE',30.4,'-Y',12,1.0,'out');if(pm)pm.moves.push({id:uid(),kind:'rotate',q:[0,0,1,0],start:31.6+SH,dur:1.6,style:'swing'});mvs('POWER_MODULE',33.4,'Y',12,1.0,'drop');
+   step('FACEPLATE',{kind:'move',vec:[0,0,-fpd],start:34.5,dur:0.9,style:'out'});mvs('FACEPLATE',35.5,'Y',6,0.7,'spring');}
+  // act 5: everything explodes and gets its label
+  const EXS=36.6+SH;
+  const ORDER=['FACEPLATE','SCREEN','SCREEN_HOLDER_L','SCREEN_HOLDER_R','SLOT_POWER_L','SLOT_POWER_R','RAIL','POWER_MODULE','END_CAP_L','END_CAP_R','SLEEVE_L','SLEEVE_R','LEG_L','LEG_R','MOUNT_PLATE','SLOT_KEY_L','SLOT_KEY_R','CLAMP_L','CLAMP_R'];
+  ORDER.forEach((n,i)=>{const p=pn(n),e=EX[n];if(!p||!e)return;p.moves.push({id:uid(),kind:'move',vec:e.slice(),start:EXS+i*0.14,dur:1.8,style:'overshoot'});});
   for(const n of Object.keys(DESC)){const p=pn(n);if(!p)continue;const b=p.bbox;const c=[(b.min[0]+b.max[0])/2-p.pivot.x,(b.min[1]+b.max[1])/2-p.pivot.y,(b.min[2]+b.max[2])/2-p.pivot.z];const s={id:uid(),name:n+' label',part:p.id,local:c};S.snaps.push(s);
-    S.texts.push({id:uid(),l1:DESC[n][0],l2:DESC[n][1],t0:EXS+2.4,t1:EXS+8.2,fade:0.5,size:18,color:'#e7ecf5',anchor:'snap',align:'center',x:0,y:-1.2,snap:s.id});}
-  S.texts.push({id:uid(),l1:'POWER DREAM · all parts',l2:'所有零件',t0:EXS+2.2,t1:EXS+8.2,fade:0.5,size:36,color:'#f5a524',anchor:'screen',x:5,y:8,snap:null});
+    S.texts.push({id:uid(),l1:DESC[n][0],l2:DESC[n][1],t0:EXS+2.8,t1:EXS+8.6,fade:0.5,size:18,color:'#e7ecf5',anchor:'snap',align:'center',x:0,y:-1.2,snap:s.id});}
+  S.texts.push({id:uid(),l1:'POWER DREAM · all parts',l2:'所有零件',t0:EXS+2.6,t1:EXS+8.6,fade:0.5,size:36,color:'#f5a524',anchor:'screen',x:5,y:8,snap:null});
   const cx=0,cy=0;
-  S.camKeys=[{t:0,pos:[cx+95,cy-110,60],tgt:[cx,cy,16],fov:40,ease:'inout'},{t:5,pos:[cx+73,cy-85,34],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:10+SH,pos:[cx+43,cy-80,24],tgt:[cx,cy,20],fov:40,ease:'inout'},{t:13.2+SH,pos:[cx+33,cy-90,27],tgt:[cx,cy,26],fov:40,ease:'inout'},{t:18.5+SH,pos:[cx+8,cy-68,30],tgt:[cx,cy,24],fov:40,ease:'inout'},{t:24+SH,pos:[cx,cy-80,22],tgt:[cx,cy,24],fov:40,ease:'inout'},{t:28.5+SH,pos:[cx,cy-85,14],tgt:[cx,cy,21],fov:40,ease:'inout'},{t:33.5+SH,pos:[cx-50,cy-80,27],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:EXS+2.4,pos:[cx+10,cy-140,40],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:EXS+8.2,pos:[cx-30,cy-135,44],tgt:[cx,cy,18],fov:40,ease:'linear'}];
-  S.dur=EXS+8.2; $('tlDur').value=S.dur;
+  S.camKeys=[{t:0,pos:[cx+95,cy-110,60],tgt:[cx,cy,16],fov:40,ease:'inout'},{t:5,pos:[cx+73,cy-85,34],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:10+SH,pos:[cx+43,cy-80,24],tgt:[cx,cy,20],fov:40,ease:'inout'},{t:13.2+SH,pos:[cx+33,cy-90,27],tgt:[cx,cy,26],fov:40,ease:'inout'},{t:18.5+SH,pos:[cx+8,cy-68,30],tgt:[cx,cy,24],fov:40,ease:'inout'},{t:24+SH,pos:[cx,cy-80,22],tgt:[cx,cy,24],fov:40,ease:'inout'},{t:28.5+SH,pos:[cx,cy-85,14],tgt:[cx,cy,21],fov:40,ease:'inout'},{t:36.5+SH,pos:[cx-50,cy-80,27],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:EXS+2.8,pos:[cx+10,cy-140,40],tgt:[cx,cy,18],fov:40,ease:'inout'},{t:EXS+8.6,pos:[cx-30,cy-135,44],tgt:[cx,cy,18],fov:40,ease:'linear'}];
+  S.dur=EXS+8.6; $('tlDur').value=S.dur;
   camFollow=true; evaluate(0); refreshAll(); pushUndo();
   toast('demo loaded with its story: press PLAY. Click any part to see its motion list.',6000);
 }
@@ -812,7 +827,7 @@ function evaluate(t){
     _evalCache[p.id]={m:w,vis:pose.vis}; return _evalCache[p.id];
   };
   for(const p of S.parts){const r=worldOf(p);p.mesh.matrix.copy(r.m);p.mesh.visible=r.vis;const m=p.mesh.material;const on=S.sel.includes(p.id);if(on){m.color.set('#f5a524').lerp(new THREE.Color(p.color),0.55);}else m.color.set(p.color);if(m.emissive)m.emissive.setHex(on?0x4a3608:0x000000);m.opacity=p.style==='xray'?Math.min(p.opacity,0.3):p.opacity;}
-  selBox.visible=false;const sp=selPart();if(sp&&sp.mesh.visible&&!REC.active){const b=new THREE.Box3().setFromObject(sp.mesh);if(!b.isEmpty()){selBox.box.copy(b.expandByScalar(0.3));selBox.visible=true;}}
+  selBox.visible=false;const sp=selPart();if(sp&&sp.mesh.visible&&!REC.active&&!S.preview){const b=new THREE.Box3().setFromObject(sp.mesh);if(!b.isEmpty()){selBox.box.copy(b.expandByScalar(0.3));selBox.visible=true;}}
   // camera
   if(S.camKeys.length&&(S.playing||REC.active||camFollow)){const c=interp(S.camKeys,t,(a,b,e)=>({pos:a.pos.map((x,i)=>x+(b.pos[i]-x)*e),tgt:a.tgt.map((x,i)=>x+(b.tgt[i]-x)*e),fov:a.fov+(b.fov-a.fov)*e}));camera.position.fromArray(c.pos);controls.target.fromArray(c.tgt);camera.fov=c.fov;camera.updateProjectionMatrix();controls.update();}
   S.time=t; $('tNow').textContent=t.toFixed(2); $('tNowTop').textContent=t.toFixed(2)+' s';
@@ -831,12 +846,13 @@ function drawTexts(ctx,w,h,t){
     ctx.fillText(tx.l1,x,y); if(tx.l2) ctx.fillText(tx.l2,x,y+size*1.35); ctx.restore();}
 }
 function drawHelpers(ctx,w,h){
+  if(S.preview) return;
   // snap point markers
-  for(const s of S.snaps){const p=snapWorld(s).project(camera);if(p.z>1)continue;const x=(p.x+1)/2*w,y=(1-p.y)/2*h;const act=s.id===S.activeSnap;
+  if(S.showLabels) for(const s of S.snaps){const p=snapWorld(s).project(camera);if(p.z>1)continue;const x=(p.x+1)/2*w,y=(1-p.y)/2*h;const act=s.id===S.activeSnap;
     ctx.beginPath();ctx.arc(x,y,act?6:4,0,Math.PI*2);ctx.fillStyle=act?'#f5a524':'#78aaff';ctx.fill();ctx.strokeStyle='#0d0f13';ctx.lineWidth=1.5;ctx.stroke();
     if(act||S.snaps.length<40){ctx.fillStyle=act?'#f5a524':'#7d8798';ctx.font='10px "DM Mono",monospace';ctx.fillText(s.name,x+8,y-8);}}
   // joint axes
-  for(const j of S.joints){const ax=jointAxis(j);if(!ax)continue;const p=partById(j.part);const o=ax.origin.clone();const len=j.type==='slide'?(j.max-j.min):8;const A=o.clone().add(ax.dir.clone().multiplyScalar(j.type==='slide'?j.min:-len/2)),B=o.clone().add(ax.dir.clone().multiplyScalar(j.type==='slide'?j.max:len/2));
+  if(S.showLabels) for(const j of S.joints){const ax=jointAxis(j);if(!ax)continue;const p=partById(j.part);const o=ax.origin.clone();const len=j.type==='slide'?(j.max-j.min):8;const A=o.clone().add(ax.dir.clone().multiplyScalar(j.type==='slide'?j.min:-len/2)),B=o.clone().add(ax.dir.clone().multiplyScalar(j.type==='slide'?j.max:len/2));
     const a=A.project(camera),b=B.project(camera);if(a.z>1||b.z>1)continue;ctx.beginPath();ctx.moveTo((a.x+1)/2*w,(1-a.y)/2*h);ctx.lineTo((b.x+1)/2*w,(1-b.y)/2*h);ctx.strokeStyle=j.id===S.activeJoint?'#f5a524':'#5ecf8d';ctx.lineWidth=j.id===S.activeJoint?2.5:1.5;ctx.setLineDash([6,4]);ctx.stroke();ctx.setLineDash([]);}
   // pick hover
   if(pick.hover){const p=pick.hover.clone().project(camera);const x=(p.x+1)/2*w,y=(1-p.y)/2*h;ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.strokeStyle='#f5a524';ctx.lineWidth=2;ctx.stroke();ctx.beginPath();ctx.moveTo(x-12,y);ctx.lineTo(x+12,y);ctx.moveTo(x,y-12);ctx.lineTo(x,y+12);ctx.stroke();}
@@ -893,7 +909,7 @@ function planePoint(){const z=$('pathPlane').value==='pivot'&&selPart()?selPart(
 function nearestSnapToMouse(e){const r=view.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=14;for(const s of S.snaps){const p=snapWorld(s).project(camera);if(p.z>1)continue;const x=(p.x+1)/2*r.width,y=(1-p.y)/2*r.height;const d=Math.hypot(x-mx,y-my);if(d<bd){bd=d;best=s;}}return best;}
 function dotAt(e){const p=selPart();if(!p)return null;const r=view.getBoundingClientRect();const mx=e.clientX-r.left,my=e.clientY-r.top;let best=null,bd=10;for(const k of p.keys){if(!k.step)continue;const pt=keyWorldPos(p,k).project(camera);if(pt.z>1)continue;const d=Math.hypot((pt.x+1)/2*r.width-mx,(1-pt.y)/2*r.height-my);if(d<bd){bd=d;best=k;}}return best;}
 let downPos=null;
-view.addEventListener('pointerdown',e=>{downPos=[e.clientX,e.clientY];view.focus();if(e.button!==0||pick.mode||gizmo.axis)return;
+view.addEventListener('pointerdown',e=>{downPos=[e.clientX,e.clientY];view.focus();if(S.preview){togglePlay();return;}if(e.button!==0||pick.mode||gizmo.axis)return;
   const k=dotAt(e);if(k){const o=stepOwner(k.step);if(o&&o.s.kind==='move'){mouseNDC(e);const wp=keyWorldPos(o.p,k);const nrm=camera.getWorldDirection(V3());dotDrag={s:o.s,plane:new THREE.Plane().setFromNormalAndCoplanarPoint(nrm,wp),start:wp.clone(),vec:o.s.vec.slice()};S.activeStep=o.s.id;controls.enabled=false;view.setPointerCapture(e.pointerId);camFollow=true;evaluate(k.t);refreshAll();}return;}
   mouseNDC(e);const hit=castParts();if(hit){const p=hit.object.userData.part;if(!S.sel.includes(p.id)){S.sel=[p.id];S.activeStep=null;evaluate(S.time);refreshAll();}const nrm=e.shiftKey?V3(0,0,1):camera.getWorldDirection(V3());directDrag={p:selPart(),hit:hit.point.clone(),plane:new THREE.Plane().setFromNormalAndCoplanarPoint(nrm,hit.point),moved:false};controls.enabled=false;view.setPointerCapture(e.pointerId);}
 });
@@ -906,6 +922,7 @@ view.addEventListener('pointermove',e=>{
   else if(pick.mode==='path'){const near=nearestSnapToMouse(e);pick.hover=near?snapWorld(near):($('pathSnapOnly').checked?null:planePoint());}
 });
 view.addEventListener('pointerup',e=>{
+  if(S.preview){downPos=null;return;}
   if(directDrag){const dd=directDrag;directDrag=null;controls.enabled=true;view.style.cursor='default';downPos=null;if(dd.moved)endDrag();else refreshAll();return;}
   if(dotDrag){dotDrag=null;controls.enabled=true;refreshAll();pushUndo();downPos=null;return;}
   if(!downPos)return;const moved=Math.hypot(e.clientX-downPos[0],e.clientY-downPos[1])>4;downPos=null;if(moved||e.button!==0)return;
@@ -1096,7 +1113,7 @@ document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.
   else if(k==='arrowright'){camFollow=true;evaluate(Math.min(S.dur,snapT(S.time+1/S.fps)));refreshAll();}
   else if(k==='arrowleft'){camFollow=true;evaluate(Math.max(0,snapT(S.time-1/S.fps)));refreshAll();}
   else if(k==='delete'||k==='backspace'){deleteActiveStep();}
-  else if(k==='escape'){setPickMode(null);S.sel=[];S.activeStep=null;evaluate(S.time);refreshAll();}
+  else if(k==='escape'){if(S.preview){if(document.fullscreenElement)document.exitFullscreen();leavePreview();return;}setPickMode(null);S.sel=[];S.activeStep=null;evaluate(S.time);refreshAll();}
   else if(k==='f'){frameSelection();}
   else if(k==='z'&&(e.ctrlKey||e.metaKey)){if(e.shiftKey)redo();else undo();e.preventDefault();}
   else if(k==='y'&&(e.ctrlKey||e.metaKey)){redo();e.preventDefault();}});
@@ -1106,6 +1123,13 @@ function stopPlay(){S.playing=false;setPlayLabel();camFollow=true;evaluate(0);re
 $('bModeMove').onclick=()=>{gizmo.setMode('translate');$('bModeMove').classList.add('on');$('bModeRot').classList.remove('on');};
 $('bModeRot').onclick=()=>{gizmo.setMode('rotate');$('bModeRot').classList.add('on');$('bModeMove').classList.remove('on');};
 $('bSpace').onclick=toggleSpace;
+$('bLabels').onclick=()=>{S.showLabels=!S.showLabels;$('bLabels').classList.toggle('on',S.showLabels);};
+function enterPreview(){if(!S.parts.length){toast('load a model first');return;}const el=$('viewwrap');S.preview=true;el.classList.add('fs');S.loop=true;$('loopChk').checked=true;S.sel=[];gizmo.detach();camFollow=true;evaluate(0);S.playing=true;setPlayLabel();if(el.requestFullscreen)el.requestFullscreen().catch(()=>{});}
+function leavePreview(){if(!S.preview)return;S.preview=false;$('viewwrap').classList.remove('fs');S.playing=false;setPlayLabel();resize();refreshAll();}
+$('bPreview').onclick=enterPreview;
+document.addEventListener('fullscreenchange',()=>{if(!document.fullscreenElement)leavePreview();else setTimeout(resize,50);});
+// timeline height splitter
+(()=>{const sp=$('tlsplit');let drag=false,y0=0,h0=0;sp.addEventListener('pointerdown',e=>{drag=true;y0=e.clientY;h0=$('tlwrap').offsetHeight;sp.setPointerCapture(e.pointerId);});sp.addEventListener('pointermove',e=>{if(!drag)return;const h=clamp(h0+(y0-e.clientY),120,Math.max(160,window.innerHeight-260));document.documentElement.style.setProperty('--tlH',h+'px');resize();drawTimeline();});sp.addEventListener('pointerup',()=>{drag=false;});})();
 $('bPlay').onclick=togglePlay;$('bPlayTop').onclick=togglePlay;$('bStop').onclick=stopPlay;$('bStopTop').onclick=stopPlay;
 $('bBack').onclick=()=>{camFollow=true;evaluate(Math.max(0,snapT(S.time-1/S.fps)));refreshAll();};$('bFwd').onclick=()=>{camFollow=true;evaluate(Math.min(S.dur,snapT(S.time+1/S.fps)));refreshAll();};
 $('loopChk').onchange=e=>S.loop=e.target.checked;
